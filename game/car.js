@@ -32,7 +32,7 @@ export const buildSupercar = (scene) => {
 
     const loader = new GLTFLoader();
     loader.load(
-        'model/car.gltf',
+        '/model/car/scene.gltf',
         (gltf) => {
             const model = gltf.scene;
 
