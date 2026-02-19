@@ -4,7 +4,6 @@
 import * as THREE from 'three';
 import { blocksPerSide, pitch, roadWidth } from './environment.js';
 import { spawnSmoke } from './particles.js';
-import { updateScoreDisplay } from './ui.js';
 
 const maxOrbs = 30;
 export const orbs = [];
