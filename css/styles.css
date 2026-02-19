@@ -1,0 +1,386 @@
+/* ==========================================
+   NEON DRIVE — Global Styles (Modern CSS)
+   ========================================== */
+
+/* --- Design Tokens --- */
+:root {
+  --color-neon: #00ffcc;
+  --color-neon-pink: #ff0055;
+  --color-bg-dark: rgba(10, 10, 12, 0.85);
+  --color-bg-overlay: rgba(10, 10, 15, 0.95);
+  --color-border: #333;
+  --color-surface: #222;
+  --color-text-muted: #888;
+  --color-text-dim: #666;
+  --color-text-key: #000;
+  --color-key-bg: #fff;
+
+  --radius-sm: 4px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-pill: 20px;
+
+  --shadow-panel: 0 10px 30px rgba(0, 0, 0, 0.8);
+  --shadow-neon: 0 0 10px rgba(0, 255, 204, 0.5);
+
+  --font-sans: 'Segoe UI', Tahoma, sans-serif;
+
+  --transition-fast: 0.1s linear;
+  --transition-normal: 0.3s ease;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  overflow: hidden;
+  background: #000;
+  font-family: var(--font-sans);
+  user-select: none;
+}
+
+/* ---- Start Screen ---- */
+#start-screen {
+  position: absolute;
+  inset: 0;
+  background: var(--color-bg-overlay);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  color: white;
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+
+  & h1 {
+    font-size: 72px;
+    margin-bottom: 20px;
+    letter-spacing: 12px;
+    font-weight: 300;
+    text-transform: uppercase;
+    background: linear-gradient(45deg, var(--color-neon), var(--color-neon-pink));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    animation: glow 2s ease-in-out infinite;
+  }
+
+  & p {
+    font-size: 18px;
+    color: var(--color-neon);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    margin-bottom: 40px;
+  }
+
+  & .instructions {
+    font-size: 14px;
+    color: #999;
+    max-width: 500px;
+    text-align: center;
+    line-height: 1.8;
+  }
+
+  & .key {
+    background: var(--color-key-bg);
+    color: var(--color-text-key);
+    padding: 3px 8px;
+    border-radius: var(--radius-sm);
+    font-weight: bold;
+    margin: 0 3px;
+  }
+}
+
+@keyframes glow {
+  0%, 100% {
+    filter: drop-shadow(0 0 20px rgba(0, 255, 204, 0.5));
+  }
+  50% {
+    filter: drop-shadow(0 0 40px rgba(255, 0, 85, 0.5));
+  }
+}
+
+/* ---- UI Layer ---- */
+#ui-layer {
+  display: none;
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* ---- HUD Top-Left (Score) ---- */
+#hud-top-left {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  color: white;
+  background: var(--color-bg-dark);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-panel);
+  min-width: 200px;
+}
+
+.score-item {
+  display: flex;
+  justify-content: space-between;
+  margin-bottom: 12px;
+  align-items: center;
+}
+
+.score-label {
+  font-size: 11px;
+  color: var(--color-text-muted);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.score-value {
+  font-size: 24px;
+  font-weight: bold;
+  color: var(--color-neon);
+}
+
+/* ---- HUD Bottom-Right (Speed / Gauges) ---- */
+#hud-bottom-right {
+  position: absolute;
+  bottom: 30px;
+  right: 30px;
+  background: rgba(10, 10, 12, 0.9);
+  padding: 20px;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-panel);
+  color: #fff;
+  width: 240px;
+}
+
+.hud-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-bottom: 10px;
+}
+
+#speed-text {
+  font-size: 56px;
+  font-weight: 900;
+  color: #fff;
+  line-height: 1;
+}
+
+#gear-text {
+  font-size: 28px;
+  font-weight: bold;
+  color: var(--color-neon);
+}
+
+#nitro-container {
+  margin-top: 15px;
+}
+
+#nitro-label {
+  font-size: 10px;
+  color: var(--color-text-dim);
+  margin-bottom: 6px;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+#nitro-bg {
+  width: 100%;
+  height: 12px;
+  background: var(--color-surface);
+  border-radius: 6px;
+  overflow: hidden;
+  position: relative;
+}
+
+#nitro-bar {
+  width: 100%;
+  height: 100%;
+  background: linear-gradient(90deg, var(--color-neon), #00ff88);
+  transition: width var(--transition-fast);
+  box-shadow: var(--shadow-neon);
+}
+
+#rpm-bg {
+  width: 100%;
+  height: 8px;
+  background: var(--color-surface);
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  position: relative;
+  margin-top: 10px;
+}
+
+#rpm-bar {
+  width: 0%;
+  height: 100%;
+  background: linear-gradient(90deg, #fff, var(--color-neon), var(--color-neon-pink));
+  transition: width var(--transition-fast);
+}
+
+/* ---- Minimap ---- */
+#minimap-container {
+  position: absolute;
+  bottom: 30px;
+  left: 30px;
+  width: 210px;
+  height: 210px;
+  aspect-ratio: 1;
+  background: rgba(8, 8, 12, 0.95);
+  border: 2px solid rgba(0, 255, 204, 0.25);
+  border-radius: 50%;
+  overflow: hidden;
+  box-shadow:
+    0 0 25px rgba(0, 0, 0, 0.7),
+    inset 0 0 15px rgba(0, 0, 0, 0.5),
+    0 0 8px rgba(0, 255, 204, 0.1);
+}
+
+#minimap {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+#minimap-player {
+  display: none; /* drawn on canvas now */
+}
+
+/* ---- Controls Help ---- */
+#controls-help {
+  position: absolute;
+  top: 20px;
+  right: 30px;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(0, 0, 0, 0.5);
+  padding: 15px;
+  border-radius: var(--radius-md);
+  font-size: 13px;
+  line-height: 2;
+  border: 1px solid var(--color-surface);
+}
+
+.key {
+  display: inline-block;
+  background: var(--color-key-bg);
+  color: var(--color-text-key);
+  padding: 3px 8px;
+  border-radius: 3px;
+  font-weight: bold;
+  margin: 0 3px;
+}
+
+/* ---- Boost Indicator ---- */
+#boost-indicator {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 80px;
+  font-weight: 900;
+  color: var(--color-neon);
+  opacity: 0;
+  text-shadow: 0 0 30px rgba(0, 255, 204, 0.8);
+  pointer-events: none;
+  animation: boostPulse 0.5s ease-out;
+}
+
+@keyframes boostPulse {
+  0% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(0.5);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(1.5);
+  }
+}
+
+/* ---- Mobile Controls ---- */
+#mobile-controls {
+  display: none;
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 100%;
+  height: 40%;
+  pointer-events: auto;
+}
+
+.mobile-btn {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.1);
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-weight: bold;
+  font-size: 20px;
+  touch-action: none;
+  user-select: none;
+
+  &:active {
+    background: rgba(0, 255, 204, 0.3);
+    border-color: var(--color-neon);
+  }
+}
+
+#mobile-left { bottom: 80px; left: 20px; width: 80px; height: 80px; }
+#mobile-right { bottom: 80px; left: 120px; width: 80px; height: 80px; }
+#mobile-gas { bottom: 80px; right: 20px; width: 100px; height: 100px; }
+#mobile-brake { bottom: 80px; right: 140px; width: 80px; height: 80px; }
+#mobile-boost {
+  bottom: 200px;
+  right: 60px;
+  width: 70px;
+  height: 70px;
+  background: rgba(0, 255, 204, 0.2);
+}
+
+/* ---- Responsive ---- */
+@media (max-width: 768px) {
+  #mobile-controls { display: block; }
+  #controls-help { display: none; }
+
+  #hud-top-left {
+    top: 10px;
+    left: 10px;
+    padding: 12px;
+    font-size: 0.9em;
+  }
+
+  #hud-bottom-right {
+    bottom: 10px;
+    right: 10px;
+    padding: 15px;
+    width: 180px;
+  }
+
+  #speed-text { font-size: 40px; }
+
+  #minimap-container {
+    width: 120px;
+    height: 120px;
+    bottom: 10px;
+    left: 10px;
+  }
+}
+
+/* ---- Reduced Motion ---- */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
