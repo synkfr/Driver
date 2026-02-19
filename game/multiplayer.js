@@ -130,7 +130,7 @@ const sendState = () => {
 const connect = () => {
     if (connectAttempts >= MAX_RECONNECT) { showStatus('Multiplayer: could not connect', '#ff4444'); return; }
     const protocol = location.protocol === 'https:' ? 'wss://' : 'ws://';
-    const host = location.host || 'localhost:3000';
+    const host = 'localhost:3001';
     showStatus('Connecting to server...', '#ffaa00');
     try { ws = new WebSocket(protocol + host); } catch { showStatus('Multiplayer unavailable', '#ff4444'); return; }
     ws.onopen = () => { connected = true; connectAttempts = 0; showStatus('Connected!', '#00ffcc'); sendInterval = setInterval(sendState, 50); };
