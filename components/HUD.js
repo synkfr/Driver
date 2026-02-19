@@ -2,26 +2,30 @@
 
 import { useRef, useEffect } from 'react';
 
-export default function HUD({ data, mpStatus }) {
+export default function HUD({ data, mpStatus, settings, onBack }) {
     const minimapRef = useRef(null);
+    const gp = settings?.gameplay || {};
 
-    // Expose minimap canvas ref globally for the game engine to draw on
     useEffect(() => {
-        if (minimapRef.current) {
-            window.__minimapCanvas = minimapRef.current;
-        }
+        if (minimapRef.current) window.__minimapCanvas = minimapRef.current;
         return () => { window.__minimapCanvas = null; };
     }, []);
 
-    const { speed, gear, rpm, nitro, maxNitro, score, orbsCollected, combo } = data;
+    useEffect(() => {
+        const handleEsc = (e) => { if (e.key === 'Escape' && onBack) onBack(); };
+        window.addEventListener('keydown', handleEsc);
+        return () => window.removeEventListener('keydown', handleEsc);
+    }, [onBack]);
 
+    const { speed, gear, rpm, nitro, maxNitro, score, orbsCollected, combo } = data;
+    const displaySpeed = gp.units === 'mph' ? Math.round(speed * 0.621371) : Math.round(speed);
+    const unitLabel = gp.units === 'mph' ? 'mph' : 'km/h';
     const gearDisplay = gear === 0 && speed < 1 ? 'N' : `G${gear + 1}`;
     const rpmWidth = `${Math.max(0, Math.min(100, (rpm / 8000) * 100))}%`;
     const nitroWidth = `${(nitro / maxNitro) * 100}%`;
 
     return (
         <div id="ui-layer" style={{ display: 'block' }}>
-            {/* Score */}
             <div id="hud-top-left">
                 <div className="score-item">
                     <span className="score-label">Score</span>
@@ -37,38 +41,37 @@ export default function HUD({ data, mpStatus }) {
                 </div>
             </div>
 
-            {/* Controls help */}
-            <div id="controls-help">
-                <span className="key">W</span> <span className="key">A</span> <span className="key">S</span> <span className="key">D</span> Steer<br />
-                <span className="key">Space</span> Drift<br />
-                <span className="key">Shift</span> Nitro Boost<br />
-                <span className="key">C</span> Camera<br />
-                <span className="key">N</span> Night Mode<br />
-                <span className="key">H</span> Honk
-            </div>
+            {gp.showControls !== false && (
+                <div id="controls-help">
+                    <span className="key">W</span> <span className="key">A</span> <span className="key">S</span> <span className="key">D</span> Steer<br />
+                    <span className="key">Space</span> Drift<br />
+                    <span className="key">Shift</span> Nitro<br />
+                    <span className="key">C</span> Camera<br />
+                    <span className="key">N</span> Night<br />
+                    <span className="key">Esc</span> Menu
+                </div>
+            )}
 
-            {/* Minimap */}
-            <div id="minimap-container">
-                <canvas id="minimap" ref={minimapRef} width={200} height={200}></canvas>
-            </div>
+            {gp.showMinimap !== false && (
+                <div id="minimap-container">
+                    <canvas id="minimap" ref={minimapRef} width={200} height={200}></canvas>
+                </div>
+            )}
 
-            {/* Speed / Gauges */}
             <div id="hud-bottom-right">
                 <div className="hud-row">
                     <div>
-                        <span id="speed-text">{Math.round(speed)}</span>{' '}
-                        <span style={{ color: '#666', fontSize: '14px' }}>km/h</span>
+                        <span id="speed-text">{displaySpeed}</span>{' '}
+                        <span style={{ color: '#666', fontSize: '14px' }}>{unitLabel}</span>
                     </div>
                     <div id="gear-text">{gearDisplay}</div>
                 </div>
-
                 <div id="nitro-container">
                     <div id="nitro-label">Nitro Boost</div>
                     <div id="nitro-bg">
                         <div id="nitro-bar" style={{ width: nitroWidth }}></div>
                     </div>
                 </div>
-
                 <div style={{ fontSize: '10px', color: '#666', margin: '12px 0 6px', textTransform: 'uppercase', letterSpacing: '1px' }}>
                     Engine RPM
                 </div>
@@ -77,9 +80,6 @@ export default function HUD({ data, mpStatus }) {
                 </div>
             </div>
 
-            <div id="boost-indicator"></div>
-
-            {/* Mobile controls */}
             <div id="mobile-controls">
                 <div className="mobile-btn" id="mobile-left">◄</div>
                 <div className="mobile-btn" id="mobile-right">►</div>
@@ -88,17 +88,14 @@ export default function HUD({ data, mpStatus }) {
                 <div className="mobile-btn" id="mobile-boost">⚡</div>
             </div>
 
-            {/* Multiplayer status */}
             {mpStatus.visible && (
-                <div
-                    style={{
-                        position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
-                        padding: '8px 20px', borderRadius: '20px', fontSize: '13px',
-                        fontFamily: 'sans-serif', zIndex: 200, pointerEvents: 'none',
-                        color: 'white', background: 'rgba(0,0,0,0.7)',
-                        border: `1px solid ${mpStatus.color || 'rgba(255,255,255,0.15)'}`,
-                    }}
-                >
+                <div style={{
+                    position: 'fixed', top: '20px', left: '50%', transform: 'translateX(-50%)',
+                    padding: '8px 20px', borderRadius: '20px', fontSize: '13px',
+                    fontFamily: 'sans-serif', zIndex: 200, pointerEvents: 'none',
+                    color: 'white', background: 'rgba(0,0,0,0.7)',
+                    border: `1px solid ${mpStatus.color || 'rgba(255,255,255,0.15)'}`,
+                }}>
                     {mpStatus.message}
                 </div>
             )}
