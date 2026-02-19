@@ -2,18 +2,18 @@
 
 import { useEffect, useRef } from 'react';
 
-export default function GameCanvas({ onHudUpdate, onMpStatus }) {
+export default function GameCanvas({ onHudUpdate, onMpStatus, settings }) {
     const containerRef = useRef(null);
     const initialized = useRef(false);
+    const cleanupRef = useRef(null);
 
     useEffect(() => {
         if (initialized.current) return;
         initialized.current = true;
 
-        // Dynamic imports to avoid SSR issues with Three.js
         const initGame = async () => {
             const THREE = await import('three');
-            const { initAudio, playHonk } = await import('../game/audio.js');
+            const { initAudio, playHonk, cleanupAudio } = await import('../game/audio.js');
             const { initKeyboard, setupMobileControls } = await import('../game/input.js');
             const { buildSupercar } = await import('../game/car.js');
             const { buildEnvironment, updateDayNight, toggleNight } = await import('../game/environment.js');
@@ -26,29 +26,14 @@ export default function GameCanvas({ onHudUpdate, onMpStatus }) {
             const { drawMinimap } = await import('../game/ui.js');
             const collectiblesModule = await import('../game/collectibles.js');
 
-            // Wire HUD callback → React state
-            setHudCallback((data) => {
-                onHudUpdate(data);
-            });
+            setHudCallback((data) => onHudUpdate(data));
+            setStatusCallback((status) => onMpStatus(status));
 
-            // Wire multiplayer status → React state
-            setStatusCallback((status) => {
-                onMpStatus(status);
-            });
-
-            // Game state
             const gameState = {
-                score: 0,
-                orbsCollected: 0,
-                combo: 1,
-                comboTimer: 0,
-                nitro: 100,
-                maxNitro: 100,
-                nitroRegenRate: 5,
-                isNitroActive: false,
+                score: 0, orbsCollected: 0, combo: 1, comboTimer: 0,
+                nitro: 100, maxNitro: 100, nitroRegenRate: 5, isNitroActive: false,
             };
 
-            // Scene setup
             const scene = new THREE.Scene();
             scene.background = new THREE.Color(0xdde5ed);
             scene.fog = new THREE.FogExp2(0xdde5ed, 0.0012);
@@ -63,20 +48,18 @@ export default function GameCanvas({ onHudUpdate, onMpStatus }) {
 
             const clock = new THREE.Clock();
 
-            // Build world
             buildEnvironment(scene);
             const carParts = buildSupercar(scene);
             spawnCollectibles(scene);
 
-            // Init systems
             initAudio();
             initKeyboard(toggleCamera, toggleNight, playHonk);
             setupMobileControls();
             initMultiplayer(scene);
 
-            // Game loop
+            let animationId;
             const animate = () => {
-                requestAnimationFrame(animate);
+                animationId = requestAnimationFrame(animate);
                 const delta = Math.min(clock.getDelta(), 0.1);
 
                 updatePhysics(delta, gameState, carParts, scene);
@@ -87,7 +70,6 @@ export default function GameCanvas({ onHudUpdate, onMpStatus }) {
                 updateMultiplayer(carParts.car);
                 updateCamera(camera, carParts.car);
 
-                // Draw minimap on React-managed canvas
                 const minimapCanvas = window.__minimapCanvas;
                 if (minimapCanvas) {
                     drawMinimap(minimapCanvas, carParts.car, physicsModule.heading, collectiblesModule.orbs);
@@ -98,17 +80,31 @@ export default function GameCanvas({ onHudUpdate, onMpStatus }) {
 
             animate();
 
-            // Resize handler
             const handleResize = () => {
                 camera.aspect = window.innerWidth / window.innerHeight;
                 camera.updateProjectionMatrix();
                 renderer.setSize(window.innerWidth, window.innerHeight);
             };
             window.addEventListener('resize', handleResize);
+
+            cleanupRef.current = () => {
+                cancelAnimationFrame(animationId);
+                window.removeEventListener('resize', handleResize);
+                cleanupAudio();
+                renderer.dispose();
+                if (containerRef.current && renderer.domElement.parentNode === containerRef.current) {
+                    containerRef.current.removeChild(renderer.domElement);
+                }
+            };
         };
 
         initGame();
-    }, [onHudUpdate, onMpStatus]);
+
+        return () => {
+            cleanupRef.current?.();
+            initialized.current = false;
+        };
+    }, [onHudUpdate, onMpStatus, settings]);
 
     return <div ref={containerRef} style={{ position: 'fixed', inset: 0, zIndex: 0 }} />;
 }
