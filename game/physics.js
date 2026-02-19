@@ -1,55 +1,29 @@
-// ==========================================
-// PHYSICS — Forza Horizon-style vehicle dynamics
-// ==========================================
 import * as THREE from 'three';
 import { keys } from './input.js';
 import { updateAudio } from './audio.js';
 import { spawnSmoke, addSkidMark } from './particles.js';
 import { pitch, blockSize, blocksPerSide } from './environment.js';
-import { orbs } from './collectibles.js';
 
-// --- Transmission ---
 export const transmission = {
     gears: [
-        { r: 3.5, max: 35 },
-        { r: 2.4, max: 70 },
-        { r: 1.7, max: 110 },
-        { r: 1.2, max: 160 },
-        { r: 0.9, max: 210 },
-        { r: 0.75, max: 260 },
+        { r: 3.5, max: 35 }, { r: 2.4, max: 70 }, { r: 1.7, max: 110 },
+        { r: 1.2, max: 160 }, { r: 0.9, max: 210 }, { r: 0.75, max: 260 },
     ],
     current: 0,
     rpm: 800,
 };
 
 export const physics = {
-    maxSpeed: 260,
-    baseAccel: 32,
-    braking: 65,
-    engineBraking: 10,
-    rollingFriction: 0.993,
-    airDrag: 0.00018,
-    wheelBase: 3.0,
-    maxSteer: 0.38,
-    steerSpeed: 2.5,
-    steerReturn: 3.5,
-    steerDamping: 0.80,
-    frontGrip: 1.0,
-    rearGrip: 0.95,
-    gripCurve: 0.85,
-    peakSlipAngle: 0.10,
-    slideSlipAngle: 0.40,
-    lateralStiffness: 3.0,
-    handbrakeRearGrip: 0.20,
-    handbrakeDecay: 0.965,
-    nitroBoost: 75,
-    nitroDrain: 16,
-    suspensionStiffness: 5.0,
-    suspensionDamping: 0.90,
-    maxPitch: 0.05,
-    maxRoll: 0.06,
-    weightFront: 0.46,
-    weightTransferRate: 0.10,
+    maxSpeed: 260, baseAccel: 32, braking: 65, engineBraking: 10,
+    rollingFriction: 0.993, airDrag: 0.00018, wheelBase: 3.0,
+    maxSteer: 0.38, steerSpeed: 2.5, steerReturn: 3.5, steerDamping: 0.80,
+    frontGrip: 1.0, rearGrip: 0.95, gripCurve: 0.85,
+    peakSlipAngle: 0.10, slideSlipAngle: 0.40, lateralStiffness: 3.0,
+    handbrakeRearGrip: 0.20, handbrakeDecay: 0.965,
+    nitroBoost: 75, nitroDrain: 16,
+    suspensionStiffness: 5.0, suspensionDamping: 0.90,
+    maxPitch: 0.05, maxRoll: 0.06,
+    weightFront: 0.46, weightTransferRate: 0.10,
 };
 
 export const velocity = new THREE.Vector3(0, 0, 0);
@@ -105,7 +79,6 @@ const getCollisionNormal = (pos) => {
     return null;
 };
 
-// HUD callback — set by GameCanvas component
 let hudCallback = null;
 export const setHudCallback = (cb) => { hudCallback = cb; };
 
@@ -118,9 +91,7 @@ export const updatePhysics = (delta, gameState, carParts, scene) => {
 
     if (gameState.comboTimer > 0) {
         gameState.comboTimer -= delta;
-        if (gameState.comboTimer <= 0) {
-            gameState.combo = 1;
-        }
+        if (gameState.comboTimer <= 0) gameState.combo = 1;
     }
 
     let carForward = new THREE.Vector3(Math.sin(heading), 0, Math.cos(heading));
@@ -284,8 +255,7 @@ export const updatePhysics = (delta, gameState, carParts, scene) => {
     }
     car.rotation.y = heading;
 
-    const wheelForwardSpeed = velocity.dot(carForward);
-    wheels.forEach((w) => { w.rotation.x += wheelForwardSpeed * delta * 0.6; });
+    wheels.forEach((w) => { w.rotation.x += velocity.dot(carForward) * delta * 0.6; });
 
     const longitudinalG = thrust * 0.0004;
     const yawRate = absSpeed > 0.3 ? (forwardSpeed * Math.tan(steeringAngle)) / phys.wheelBase : 0;
@@ -304,17 +274,11 @@ export const updatePhysics = (delta, gameState, carParts, scene) => {
     chassis.rotation.x = suspensionPitch;
     chassis.rotation.z = suspensionRoll;
 
-    // Push HUD data via callback instead of DOM access
     if (hudCallback) {
         hudCallback({
-            speed: absSpeed * 3.6,
-            gear: trans.current,
-            rpm: trans.rpm,
-            nitro: gameState.nitro,
-            maxNitro: gameState.maxNitro,
-            score: gameState.score,
-            orbsCollected: gameState.orbsCollected,
-            combo: gameState.combo,
+            speed: absSpeed * 3.6, gear: trans.current, rpm: trans.rpm,
+            nitro: gameState.nitro, maxNitro: gameState.maxNitro,
+            score: gameState.score, orbsCollected: gameState.orbsCollected, combo: gameState.combo,
         });
     }
 };

@@ -1,7 +1,3 @@
-// ==========================================
-// INPUT — Keyboard & Mobile Touch
-// ==========================================
-
 export const keys = {
     w: false, a: false, s: false, d: false,
     space: false, shift: false, c: false, n: false, h: false,
@@ -38,13 +34,7 @@ export const setupMobileControls = () => {
 
     for (const [id, key] of Object.entries(touchButtons)) {
         const btn = document.getElementById(id);
-        btn.addEventListener('touchstart', (e) => {
-            e.preventDefault();
-            keys[key] = true;
-        });
-        btn.addEventListener('touchend', (e) => {
-            e.preventDefault();
-            keys[key] = false;
-        });
+        btn.addEventListener('touchstart', (e) => { e.preventDefault(); keys[key] = true; });
+        btn.addEventListener('touchend', (e) => { e.preventDefault(); keys[key] = false; });
     }
 };

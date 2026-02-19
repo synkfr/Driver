@@ -1,6 +1,3 @@
-// ==========================================
-// CAMERA — Chase / Hood / Top / Cinematic
-// ==========================================
 import * as THREE from 'three';
 
 const camModes = ['chase', 'hood', 'top', 'cinematic'];

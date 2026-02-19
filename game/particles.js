@@ -1,20 +1,14 @@
-// ==========================================
-// PARTICLES — Optimized smoke puffs & skid marks
-// ==========================================
-// Uses object pooling to avoid GC spikes. Caps max particles.
 import * as THREE from 'three';
 
 const smokeParticles = [];
 const skidMarks = [];
 
-// Shared geometry & materials (reused, never recreated)
 let smokeGeo = null;
 let smokeMat = null;
 let smokeMatOrange = null;
 let skidGeo = null;
 let skidMat = null;
 
-// Limits
 const MAX_SMOKE = 30;
 const MAX_SKIDS = 60;
 
@@ -30,7 +24,6 @@ const ensureMaterials = () => {
 
 export const spawnSmoke = (scene, x, z, amount, color) => {
     ensureMaterials();
-
     if (smokeParticles.length >= MAX_SMOKE) return;
 
     const count = Math.min(amount, MAX_SMOKE - smokeParticles.length);
@@ -65,7 +58,6 @@ export const updateParticles = (scene, delta) => {
 export const addSkidMark = (scene, x, z, rotation) => {
     ensureMaterials();
 
-    // Remove oldest if at cap
     if (skidMarks.length >= MAX_SKIDS) {
         const old = skidMarks.shift();
         scene.remove(old);

@@ -1,6 +1,3 @@
-// ==========================================
-// MULTIPLAYER — LAN networking client (no DOM creation)
-// ==========================================
 import * as THREE from 'three';
 import { velocity, heading, steeringAngle } from './physics.js';
 
@@ -14,7 +11,6 @@ let sendInterval = null;
 let connectAttempts = 0;
 const MAX_RECONNECT = 5;
 
-// Status callback — set by GameCanvas to update React state
 let statusCallback = null;
 export const setStatusCallback = (cb) => { statusCallback = cb; };
 
@@ -122,8 +118,7 @@ const handleMessage = (msg) => {
 
 let mpCar = null;
 const sendState = () => {
-    if (!ws || ws.readyState !== 1 || !velocity) return;
-    if (!mpCar) return;
+    if (!ws || ws.readyState !== 1 || !velocity || !mpCar) return;
     ws.send(JSON.stringify({ type: 'state', state: { x: Math.round(mpCar.position.x * 100) / 100, z: Math.round(mpCar.position.z * 100) / 100, heading: Math.round(heading * 1000) / 1000, speed: Math.round(velocity.length() * 10) / 10, steer: Math.round((steeringAngle || 0) * 1000) / 1000, drifting: false } }));
 };
 
@@ -157,4 +152,3 @@ export const updateMultiplayer = (localCar) => {
         if (now - rp.lastUpdate > 10000) removeRemotePlayer(id);
     }
 };
-export const isMultiplayerConnected = () => connected;

@@ -1,13 +1,9 @@
-// ==========================================
-// ENVIRONMENT — City grid, lighting, day/night
-// ==========================================
 import * as THREE from 'three';
 
 export const blockSize = 140;
 export const roadWidth = 40;
 export const pitch = blockSize + roadWidth;
 export const blocksPerSide = 20;
-export const cityWidth = blocksPerSide * pitch;
 export let timeOfDay = 14;
 
 let sunLight, ambientLight;
@@ -28,7 +24,6 @@ export const buildEnvironment = (scene) => {
     sunLight.shadow.mapSize.height = 2048;
     scene.add(sunLight);
 
-    // --- Ground with road markings ---
     const canvas = document.createElement('canvas');
     canvas.width = 512;
     canvas.height = 512;
@@ -48,6 +43,7 @@ export const buildEnvironment = (scene) => {
     roadTex.wrapT = THREE.RepeatWrapping;
     roadTex.repeat.set(blocksPerSide, blocksPerSide);
 
+    const cityWidth = blocksPerSide * pitch;
     const ground = new THREE.Mesh(
         new THREE.PlaneGeometry(cityWidth, cityWidth),
         new THREE.MeshStandardMaterial({ map: roadTex, roughness: 0.9 })
@@ -56,7 +52,6 @@ export const buildEnvironment = (scene) => {
     ground.receiveShadow = true;
     scene.add(ground);
 
-    // --- City blocks & buildings ---
     const totalBlocks = blocksPerSide * blocksPerSide;
 
     const blockGeo = new THREE.BoxGeometry(blockSize, 1, blockSize);
