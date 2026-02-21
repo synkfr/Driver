@@ -1,5 +1,4 @@
 import * as THREE from 'three';
-import { velocity, heading, steeringAngle } from './physics.js';
 
 let ws = null;
 let myId = null;
@@ -117,9 +116,12 @@ const handleMessage = (msg) => {
 };
 
 let mpCar = null;
+let mpSpeed = 0;
+let mpHeading = 0;
+let mpSteer = 0;
 const sendState = () => {
-    if (!ws || ws.readyState !== 1 || !velocity || !mpCar) return;
-    ws.send(JSON.stringify({ type: 'state', state: { x: Math.round(mpCar.position.x * 100) / 100, z: Math.round(mpCar.position.z * 100) / 100, heading: Math.round(heading * 1000) / 1000, speed: Math.round(velocity.length() * 10) / 10, steer: Math.round((steeringAngle || 0) * 1000) / 1000, drifting: false } }));
+    if (!ws || ws.readyState !== 1 || !mpCar) return;
+    ws.send(JSON.stringify({ type: 'state', state: { x: Math.round(mpCar.position.x * 100) / 100, z: Math.round(mpCar.position.z * 100) / 100, heading: Math.round(mpHeading * 1000) / 1000, speed: Math.round(mpSpeed * 10) / 10, steer: Math.round(mpSteer * 1000) / 1000, drifting: false } }));
 };
 
 const connect = () => {
@@ -135,8 +137,11 @@ const connect = () => {
 };
 
 export const initMultiplayer = (gameScene) => { scene = gameScene; connect(); };
-export const updateMultiplayer = (localCar) => {
+export const updateMultiplayer = (localCar, speed, heading, steerAngle) => {
     mpCar = localCar;
+    mpSpeed = speed || 0;
+    mpHeading = heading || 0;
+    mpSteer = steerAngle || 0;
     if (!connected) return;
     const now = performance.now();
     for (const id of Object.keys(remotePlayers)) {

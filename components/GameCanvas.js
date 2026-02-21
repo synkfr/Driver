@@ -162,7 +162,7 @@ export default function GameCanvas({ onHudUpdate, onMpStatus, settings }) {
                 updateSkidMarks(scene, delta);
                 updateCollectibles(delta, scene, carParts.car, gameState);
                 updateDayNight(delta, carParts.car, carParts.headlights, scene);
-                updateMultiplayer(carParts.car);
+                updateMultiplayer(carParts.car, Math.abs(vehicle.forwardSpeed), vehicle.heading, t ? t.steerAngle : 0);
                 updateCamera(camera, carParts.car);
 
                 const minimapCanvas = window.__minimapCanvas;
