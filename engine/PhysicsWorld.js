@@ -1,4 +1,4 @@
-import { Vec3, clamp } from './MathUtils.js';
+import { Vec3, clamp, lerp } from './MathUtils.js';
 import { VehicleBody } from './VehicleBody.js';
 import { Wheel } from './Wheel.js';
 import { EngineUnit } from './Engine.js';
@@ -45,15 +45,48 @@ export class Vehicle {
         this.maxNitro = config.maxNitro || 100;
         this.nitroDrain = config.nitroDrain || 16;
         this.nitroRegen = config.nitroRegen || 5;
-        this.nitroBoostForce = config.nitroBoostForce || 6000;
+        this.nitroBoostForce = config.nitroBoostForce || 75;
         this.isNitroActive = false;
 
         this.isDrifting = false;
         this.driftAngle = 0;
+
+        this.maxSpeed = config.maxSpeed || 260;
+        this.baseAccel = config.baseAccel || 32;
+        this.brakingForce = config.brakingForce || 65;
+        this.engineBrakingForce = config.engineBrakingForce || 10;
+        this.rollingFriction = 0.993;
+        this.airDrag = 0.00018;
+        this.lateralStiffness = 3.0;
+
+        this.frontGrip = 1.0;
+        this.rearGrip = 0.95;
+        this.gripCurve = 0.85;
+        this.peakSlipAngle = 0.10;
+        this.slideSlipAngle = 0.40;
+        this.handbrakeRearGrip = 0.20;
+        this.handbrakeDecay = 0.965;
+
+        this.suspensionStiffness = 5.0;
+        this.suspensionDamping = 0.90;
+        this.maxPitch = 0.05;
+        this.maxRoll = 0.06;
+
+        this.suspensionPitch = 0;
+        this.suspensionRoll = 0;
+        this.suspensionPitchVel = 0;
+        this.suspensionRollVel = 0;
+        this.frontLoad = 0.48;
+
+        this.steeringAngle = 0;
+        this.maxSteer = 0.38;
+        this.steerSpeed = 2.5;
+        this.steerReturn = 3.5;
     }
 
     get position() { return this.body.position; }
     get heading() { return this.body.heading; }
+    set heading(v) { this.body.heading = v; }
     get speed() { return this.body.getSpeed(); }
     get speedKmh() { return this.body.getSpeedKmh(); }
     get forwardSpeed() { return this.body.getForwardSpeed(); }
@@ -73,6 +106,12 @@ export class Vehicle {
         this.nitro = this.maxNitro;
         this.isNitroActive = false;
         this.isDrifting = false;
+        this.steeringAngle = 0;
+        this.suspensionPitch = 0;
+        this.suspensionRoll = 0;
+        this.suspensionPitchVel = 0;
+        this.suspensionRollVel = 0;
+        this.frontLoad = 0.48;
     }
 }
 
@@ -118,27 +157,45 @@ export class PhysicsWorld {
         }
     }
 
+    tireGripCurve(slipAngle, peakSlip, slideSlip, curveFalloff) {
+        const absSlip = Math.abs(slipAngle);
+        if (absSlip < peakSlip) return absSlip / peakSlip;
+        if (absSlip < slideSlip) {
+            const t = (absSlip - peakSlip) / (slideSlip - peakSlip);
+            return 1.0 - t * (1.0 - curveFalloff);
+        }
+        return curveFalloff * 0.7;
+    }
+
     updateVehicle(v, dt) {
         const body = v.body;
         const input = v.input;
-        const fwd = body.getForwardDir();
-        const right = body.getRightDir();
-        const forwardSpeed = body.getForwardSpeed();
+
+        let carForward = body.getForwardDir();
+        let carRight = body.getRightDir();
+        let forwardSpeed = body.linearVelocity.dot(carForward);
+        let lateralSpeed = body.linearVelocity.dot(carRight);
         const absSpeed = Math.abs(forwardSpeed);
-        const speed = body.getSpeed();
+        const totalSpeed = body.linearVelocity.length();
+        const speedFactor = clamp(totalSpeed / v.maxSpeed, 0, 1);
 
-        const steerAngle = v.steering.update(input.steer, forwardSpeed, dt);
-        const ackermann = v.steering.getAckermannAngles();
+        const speedSteerReduction = 1.0 - speedFactor * 0.75;
+        const effectiveMaxSteer = v.maxSteer * speedSteerReduction * v.damage.getSteeringPenalty();
+        const steerInput = clamp(input.steer, -1, 1);
+        const targetAngle = steerInput * effectiveMaxSteer + v.damage.getAlignmentDrift();
 
-        const alignDrift = v.damage.getAlignmentDrift();
-        v.wheels[0].steerAngle = ackermann.left + alignDrift;
-        v.wheels[1].steerAngle = ackermann.right + alignDrift;
-        v.wheels[2].steerAngle = 0;
-        v.wheels[3].steerAngle = 0;
+        let rampRate;
+        if (steerInput !== 0) {
+            rampRate = v.steerSpeed * dt;
+        } else {
+            rampRate = v.steerReturn * (0.5 + speedFactor * 1.5) * dt;
+        }
+        v.steeringAngle = lerp(v.steeringAngle, targetAngle, clamp(rampRate, 0, 1));
 
-        const steeringPenalty = v.damage.getSteeringPenalty();
-        v.wheels[0].steerAngle *= steeringPenalty;
-        v.wheels[1].steerAngle *= steeringPenalty;
+        if (v.wheels.length >= 2) {
+            v.wheels[0].steerAngle = v.steeringAngle;
+            v.wheels[1].steerAngle = v.steeringAngle;
+        }
 
         v.isNitroActive = input.nitro && v.nitro > 0 && input.throttle > 0;
         if (v.isNitroActive) {
@@ -148,185 +205,157 @@ export class PhysicsWorld {
         }
 
         let throttle = clamp(input.throttle, 0, 1);
-        throttle = v.assists.updateTC(v.wheels, throttle);
         throttle *= v.damage.getPowerPenalty();
 
-        const avgDrivenWheelSpeed = this.getAvgDrivenWheelSpeed(v);
+        const avgDrivenWheelSpeed = absSpeed / v.wheels[0].radius;
         const wheelFeedbackRPM = v.transmission.getWheelRPMToEngineRPM(
-            Math.abs(avgDrivenWheelSpeed) * 60 / (2 * Math.PI)
+            avgDrivenWheelSpeed * 60 / (2 * Math.PI)
         );
 
         const engineTorque = v.engine.update(wheelFeedbackRPM, throttle, dt);
         v.transmission.update(v.engine.rpm, forwardSpeed, dt);
 
-        const wheelTorque = v.transmission.getWheelTorque(engineTorque);
-        const torqueSplit = v.transmission.getTorqueSplit();
+        let accelG = 0;
+        if (input.throttle > 0) accelG = 0.3;
+        if (input.brake > 0) accelG = -0.5;
+        const weightShift = accelG * 0.10;
+        v.frontLoad = lerp(v.frontLoad, 0.48 - weightShift, dt * 3);
+        const rearLoad = 1.0 - v.frontLoad;
 
-        let brakeTorque = clamp(input.brake, 0, 1) * 3000;
-        brakeTorque = v.assists.updateABS(v.wheels, brakeTorque, dt);
+        let thrust = 0;
+        const gear = v.transmission.gearRatios[v.transmission.currentGear];
+        const rawThrust = v.baseAccel * Math.abs(gear || 1);
 
-        if (input.handbrake) {
-            v.wheels[2].locked = true;
-            v.wheels[3].locked = true;
-        } else {
-            v.wheels[2].locked = false;
-            v.wheels[3].locked = false;
+        if (input.throttle > 0) {
+            const rpmEfficiency = 1.0 - Math.pow(clamp((v.engine.rpm - 6500) / 1500, 0, 1), 2) * 0.3;
+            thrust += rawThrust * rpmEfficiency * throttle;
+            if (v.isNitroActive) thrust += v.nitroBoostForce;
+        } else if (input.brake <= 0) {
+            if (absSpeed > 1) thrust -= v.engineBrakingForce * Math.sign(forwardSpeed);
         }
 
-        const groundHeight = this.collision.getTerrainHeight(body.position.x, body.position.z);
-        const wheelRadius = v.wheels[0].radius;
-        const groundLevel = groundHeight + wheelRadius;
+        if (input.brake > 0) thrust -= v.brakingForce;
+        if (input.handbrake) thrust = 0;
 
-        if (body.position.y <= groundLevel) {
-            body.position.y = groundLevel;
-            if (body.linearVelocity.y < 0) body.linearVelocity.y = 0;
-            body.grounded = true;
-        } else {
-            body.applyForce(new Vec3(0, -this.gravity * body.mass, 0));
-            body.grounded = false;
-        }
+        const tractionForce = rearLoad * 2.0 * rawThrust;
+        if (thrust > 0) thrust = Math.min(thrust, tractionForce + (v.isNitroActive ? v.nitroBoostForce : 0));
 
-        const dragForce = v.aero.computeDrag(body.linearVelocity, fwd);
-        body.applyForce(dragForce.scale(v.damage.getDragPenalty()));
+        let targetRpm = 800 + (absSpeed / (v.maxSpeed / 3.6)) * 7200;
+        if (v.isNitroActive) targetRpm += 800;
+        v.engine.rpm = lerp(v.engine.rpm, targetRpm, dt * 8);
+        v.engine.rpm = clamp(v.engine.rpm, 800, 8200);
 
-        const downforce = v.aero.computeDownforce(speed);
+        const slipAngle = totalSpeed > 1 ? Math.atan2(lateralSpeed, Math.abs(forwardSpeed)) : 0;
+        const absSlip = Math.abs(slipAngle);
 
-        const windForce = this.weather.getWindForce(v.aero.frontalArea);
-        if (windForce.lengthSq() > 0) body.applyForce(windForce);
+        const frontGripMult = this.tireGripCurve(slipAngle, v.peakSlipAngle, v.slideSlipAngle, v.gripCurve);
+        const rearGripMult = this.tireGripCurve(slipAngle, v.peakSlipAngle, v.slideSlipAngle, v.gripCurve);
 
-        const totalWeight = body.mass * this.gravity;
-        const accelG = forwardSpeed > 0.5 ? (throttle - input.brake) * 0.3 : 0;
-        const weightTransfer = accelG * body.mass * 0.1;
-        const frontStaticLoad = totalWeight * 0.48;
-        const rearStaticLoad = totalWeight * 0.52;
+        let effectiveFrontGrip = v.frontGrip * frontGripMult * v.frontLoad * 2;
+        let effectiveRearGrip = v.rearGrip * rearGripMult * rearLoad * 2;
 
-        let frontLeftLoad = (frontStaticLoad - weightTransfer) * 0.5 + downforce.front * 0.5;
-        let frontRightLoad = (frontStaticLoad - weightTransfer) * 0.5 + downforce.front * 0.5;
-        let rearLeftLoad = (rearStaticLoad + weightTransfer) * 0.5 + downforce.rear * 0.5;
-        let rearRightLoad = (rearStaticLoad + weightTransfer) * 0.5 + downforce.rear * 0.5;
-
-        const yawRate = body.angularVelocity.y;
-        const lateralAccel = yawRate * absSpeed;
-        const lateralTransfer = lateralAccel * body.mass * 0.05;
-
-        frontLeftLoad += lateralTransfer;
-        frontRightLoad -= lateralTransfer;
-        rearLeftLoad += lateralTransfer;
-        rearRightLoad -= lateralTransfer;
-
-        const frontARB = v.frontARB.compute(
-            v.wheels[0].suspension.compression,
-            v.wheels[1].suspension.compression
-        );
-        frontLeftLoad += frontARB.leftForce;
-        frontRightLoad += frontARB.rightForce;
-
-        const rearARB = v.rearARB.compute(
-            v.wheels[2].suspension.compression,
-            v.wheels[3].suspension.compression
-        );
-        rearLeftLoad += rearARB.leftForce;
-        rearRightLoad += rearARB.rightForce;
-
-        const loads = [
-            Math.max(frontLeftLoad, 0),
-            Math.max(frontRightLoad, 0),
-            Math.max(rearLeftLoad, 0),
-            Math.max(rearRightLoad, 0),
-        ];
-
-        let totalLat = 0;
-        let totalLong = 0;
-        let totalYawTorque = 0;
         v.isDrifting = false;
+        const isBraking = input.brake > 0 && forwardSpeed > 5;
 
-        const engineBrakingTorque = v.engine.getEngineBraking(v.engine.rpm, throttle, forwardSpeed);
+        if (input.handbrake && absSpeed > 8) {
+            effectiveRearGrip *= v.handbrakeRearGrip;
+            v.isDrifting = true;
+        }
+        if (absSlip > v.peakSlipAngle * 1.5) v.isDrifting = true;
 
-        for (let i = 0; i < 4; i++) {
-            const wheel = v.wheels[i];
-            const worldPos = body.localToWorld(wheel.localPosition);
+        const avgGrip = (effectiveFrontGrip + effectiveRearGrip) * 0.5;
+        const currentGrip = clamp(avgGrip, 0.15, 1.0);
 
-            wheel.surface = this.weather.getSurfaceModifier(worldPos.x, worldPos.z);
-
-            const wheelHeading = body.heading + wheel.steerAngle;
-            const wheelFwd = new Vec3(Math.sin(wheelHeading), 0, Math.cos(wheelHeading));
-            const wheelRight = new Vec3(Math.cos(wheelHeading), 0, -Math.sin(wheelHeading));
-
-            const wFwdSpeed = body.linearVelocity.dot(wheelFwd);
-            const wLatSpeed = body.linearVelocity.dot(wheelRight);
-
-            const driveTorqueForWheel = wheel.isDriven
-                ? Math.max(0, wheelTorque) * (i < 2 ? torqueSplit.front : torqueSplit.rear) * 0.5
-                : 0;
-
-            const ebForWheel = wheel.isDriven ? engineBrakingTorque * 0.5 : 0;
-
-            wheel.update(wFwdSpeed, wLatSpeed, driveTorqueForWheel, brakeTorque * 0.25, ebForWheel, loads[i], dt);
-
-            const longForceLocal = wheel.longitudinalForce;
-            const latForceLocal = -wheel.lateralForce;
-
-            const forceWorldX = wheelFwd.x * longForceLocal + wheelRight.x * latForceLocal;
-            const forceWorldZ = wheelFwd.z * longForceLocal + wheelRight.z * latForceLocal;
-
-            totalLong += fwd.x * forceWorldX + fwd.z * forceWorldZ;
-            totalLat += right.x * forceWorldX + right.z * forceWorldZ;
-
-            const leverArm = wheel.localPosition.clone();
-            totalYawTorque += leverArm.x * (fwd.x * forceWorldX + fwd.z * forceWorldZ)
-                - leverArm.z * (right.x * forceWorldX + right.z * forceWorldZ);
-
-            if (wheel.isDrifting()) v.isDrifting = true;
+        if (absSpeed > 0.3) {
+            let turnRate = (forwardSpeed * Math.tan(v.steeringAngle)) / body.wheelBase;
+            turnRate *= clamp(effectiveFrontGrip, 0.3, 1.0);
+            body.heading += turnRate * dt;
         }
 
-        body.applyForce(new Vec3(
-            fwd.x * totalLong + right.x * totalLat,
-            0,
-            fwd.z * totalLong + right.z * totalLat
-        ));
-        body.applyTorque(new Vec3(0, totalYawTorque, 0));
+        carForward = body.getForwardDir();
+        carRight = body.getRightDir();
 
-        if (v.isNitroActive) {
-            body.applyForce(fwd.clone().scale(v.nitroBoostForce));
+        body.linearVelocity.addScaled(carForward, thrust * dt);
+        body.linearVelocity.scale(input.handbrake ? v.handbrakeDecay : v.rollingFriction);
+
+        if (totalSpeed > 5) {
+            const dragForce = v.airDrag * totalSpeed * totalSpeed * v.damage.getDragPenalty();
+            const dragDecel = Math.min(dragForce * dt, totalSpeed * 0.5);
+            const velNorm = body.linearVelocity.clone().normalize();
+            body.linearVelocity.addScaled(velNorm, -dragDecel);
         }
+
+        const maxCurrentSpeed = v.isNitroActive ? v.maxSpeed * 1.3 : v.maxSpeed;
+        if (body.linearVelocity.length() > maxCurrentSpeed) {
+            body.linearVelocity.setLength(maxCurrentSpeed);
+        }
+
+        forwardSpeed = body.linearVelocity.dot(carForward);
+        lateralSpeed = body.linearVelocity.dot(carRight);
+
+        let lateralReduction = currentGrip * v.lateralStiffness * dt;
+        lateralReduction = clamp(lateralReduction, 0, 0.85);
+        const correctedLateral = lateralSpeed * (1.0 - lateralReduction);
+
+        body.linearVelocity.copy(
+            carForward.clone().scale(forwardSpeed).add(carRight.clone().scale(correctedLateral))
+        );
 
         const sideDrag = v.damage.getSideDragBias();
         if (Math.abs(sideDrag) > 0.001) {
-            body.applyForce(right.clone().scale(sideDrag * speed * body.mass));
+            body.linearVelocity.addScaled(carRight, sideDrag * totalSpeed);
         }
 
-        body.integrate(dt);
+        const groundHeight = this.collision.getTerrainHeight(body.position.x, body.position.z);
+        const groundLevel = groundHeight + v.wheels[0].radius;
+        body.position.y = groundLevel;
+        body.linearVelocity.y = 0;
 
-        const contacts = this.collision.testCollision(body.position);
-        for (const contact of contacts) {
-            const velIntoWall = body.linearVelocity.dot(contact.normal);
-            if (velIntoWall < 0) {
-                contact.impactSpeed = Math.abs(velIntoWall);
+        const nextPos = body.position.clone().addScaled(body.linearVelocity, dt);
+        const contacts = this.collision.testCollision(nextPos);
 
-                body.linearVelocity.addScaled(contact.normal, -velIntoWall * 1.2);
+        if (contacts.length > 0) {
+            for (const contact of contacts) {
+                const velIntoWall = body.linearVelocity.dot(contact.normal);
+                if (velIntoWall < 0) {
+                    body.linearVelocity.addScaled(contact.normal, -velIntoWall * 1.1);
+                    const impactLoss = clamp(1.0 - Math.abs(velIntoWall) * 0.005, 0.7, 0.95);
+                    body.linearVelocity.scale(impactLoss);
+                    body.position.addScaled(contact.normal, 0.5);
 
-                const impactLoss = clamp(1.0 - Math.abs(velIntoWall) * 0.004, 0.6, 0.95);
-                body.linearVelocity.scale(impactLoss);
-
-                body.position.addScaled(contact.normal, contact.penetration + 0.1);
-
-                const localNormal = body.worldToLocal(
-                    body.position.clone().add(contact.normal)
-                ).sub(body.worldToLocal(body.position.clone()));
-
-                v.damage.applyImpact(
-                    Math.abs(velIntoWall),
-                    localNormal.x,
-                    localNormal.z
-                );
-
-                body.angularVelocity.y *= 0.85;
+                    v.damage.applyImpact(
+                        Math.abs(velIntoWall),
+                        contact.normal.x > 0.5 ? 1 : contact.normal.x < -0.5 ? -1 : 0,
+                        contact.normal.z > 0.5 ? 1 : contact.normal.z < -0.5 ? -1 : 0
+                    );
+                }
             }
+        } else {
+            body.position.copy(nextPos);
         }
 
-        v.driftAngle = absSpeed > 2
-            ? Math.atan2(body.getLateralSpeed(), Math.abs(forwardSpeed))
-            : 0;
+        const longitudinalG = thrust * 0.0004;
+        const yawRate = absSpeed > 0.3 ? (forwardSpeed * Math.tan(v.steeringAngle)) / body.wheelBase : 0;
+        const lateralG = yawRate * absSpeed * 0.00025;
+
+        const pitchTarget = clamp(-longitudinalG, -v.maxPitch, v.maxPitch);
+        const rollTarget = clamp(-lateralG, -v.maxRoll, v.maxRoll);
+
+        v.suspensionPitchVel += (pitchTarget - v.suspensionPitch) * v.suspensionStiffness * dt;
+        v.suspensionRollVel += (rollTarget - v.suspensionRoll) * v.suspensionStiffness * dt;
+        v.suspensionPitchVel *= v.suspensionDamping;
+        v.suspensionRollVel *= v.suspensionDamping;
+        v.suspensionPitch += v.suspensionPitchVel;
+        v.suspensionRoll += v.suspensionRollVel;
+
+        v.driftAngle = absSpeed > 2 ? Math.atan2(lateralSpeed, Math.abs(forwardSpeed)) : 0;
+
+        const wheelSpinBase = forwardSpeed / v.wheels[0].radius;
+        for (const w of v.wheels) {
+            w.spinSpeed = wheelSpinBase;
+            w.spinAngle += w.spinSpeed * dt;
+            w.temperature = lerp(w.temperature, 40 + absSlip * 200, dt * 0.5);
+        }
 
         this.telemetry = {
             speed: absSpeed * 3.6,
@@ -338,25 +367,27 @@ export class PhysicsWorld {
             maxNitro: v.maxNitro,
             isDrifting: v.isDrifting,
             isNitroActive: v.isNitroActive,
-            steerAngle: steerAngle,
+            steerAngle: v.steeringAngle,
             driftAngle: v.driftAngle,
             damage: { ...v.damage.zones },
             totalDamage: v.damage.getTotalDamage01(),
             absActive: v.assists.absActive,
             tcActive: v.assists.tcActive,
             scActive: v.assists.scActive,
+            suspensionPitch: v.suspensionPitch,
+            suspensionRoll: v.suspensionRoll,
             wheels: v.wheels.map(w => ({
                 slipAngle: w.slipAngle,
                 slipRatio: w.slipRatio,
                 load: w.load,
                 temp: w.temperature,
                 wear: w.wear,
-                grounded: w.grounded,
+                grounded: true,
                 compression: w.suspension.getCompression01(),
                 bottomedOut: w.suspension.bottomedOut,
                 spinAngle: w.spinAngle,
-                lateralForce: w.lateralForce,
-                longitudinalForce: w.longitudinalForce,
+                lateralForce: 0,
+                longitudinalForce: 0,
             })),
             tireTemp: v.wheels.reduce((sum, w) => sum + w.temperature, 0) / 4,
             tireWear: v.wheels.reduce((sum, w) => sum + w.wear, 0) / 4,
@@ -378,7 +409,7 @@ export class PhysicsWorld {
     reset() {
         this.accumulator = 0;
         this.tickCount = 0;
-        this.vehicles.forEach(v => v.reset(0, 0.5, 0));
+        this.vehicles.forEach(v => v.reset(0, 0.33, 0));
         this.weather.reset();
         this.collision.reset();
         this.telemetry = null;
