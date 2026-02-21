@@ -22,7 +22,7 @@ export class VehicleBody {
             config.comZ || -0.1
         );
 
-        this.position = new Vec3(config.x || 0, config.y || 0.5, config.z || 0);
+        this.position = new Vec3(config.x || 0, config.y || 0.33, config.z || 0);
         this.rotation = new Quat();
         this.heading = 0;
 

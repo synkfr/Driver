@@ -173,7 +173,18 @@ export class PhysicsWorld {
             v.wheels[3].locked = false;
         }
 
-        body.applyForce(new Vec3(0, -this.gravity * body.mass, 0));
+        const groundHeight = this.collision.getTerrainHeight(body.position.x, body.position.z);
+        const wheelRadius = v.wheels[0].radius;
+        const groundLevel = groundHeight + wheelRadius;
+
+        if (body.position.y <= groundLevel) {
+            body.position.y = groundLevel;
+            if (body.linearVelocity.y < 0) body.linearVelocity.y = 0;
+            body.grounded = true;
+        } else {
+            body.applyForce(new Vec3(0, -this.gravity * body.mass, 0));
+            body.grounded = false;
+        }
 
         const dragForce = v.aero.computeDrag(body.linearVelocity, fwd);
         body.applyForce(dragForce.scale(v.damage.getDragPenalty()));
