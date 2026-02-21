@@ -12,9 +12,9 @@ export class EngineUnit {
         this.maxRPM = config.maxRPM || 8200;
         this.revLimiterRPM = config.revLimiterRPM || 7900;
 
-        this.engineBrakeTorque = config.engineBrakeTorque || 60;
+        this.engineBrakeTorque = config.engineBrakeTorque || 40;
         this.momentOfInertia = config.momentOfInertia || 0.15;
-        this.frictionTorque = config.frictionTorque || 15;
+        this.frictionTorque = config.frictionTorque || 10;
 
         this.rpm = this.idleRPM;
         this.throttle = 0;
@@ -23,7 +23,7 @@ export class EngineUnit {
 
     getTorque(rpm, throttle) {
         if (this.revLimiterActive && rpm > this.revLimiterRPM) {
-            return -this.frictionTorque;
+            return 0;
         }
         if (rpm >= this.revLimiterRPM) {
             this.revLimiterActive = true;
@@ -34,9 +34,15 @@ export class EngineUnit {
 
         const maxTorqueAtRPM = lerpTable(this.torqueCurve, rpm);
         const driveTorque = maxTorqueAtRPM * clamp(throttle, 0, 1);
-        const brakeTorque = throttle < 0.01 ? this.engineBrakeTorque : 0;
 
-        return driveTorque - brakeTorque - this.frictionTorque;
+        return driveTorque;
+    }
+
+    getEngineBraking(rpm, throttle, wheelSpeed) {
+        if (throttle > 0.05) return 0;
+        if (Math.abs(wheelSpeed) < 0.5) return 0;
+        const rpmFactor = clamp((rpm - this.idleRPM) / (this.redlineRPM - this.idleRPM), 0, 1);
+        return this.engineBrakeTorque * (0.3 + rpmFactor * 0.7) * Math.sign(wheelSpeed);
     }
 
     update(wheelFeedbackRPM, throttle, dt) {

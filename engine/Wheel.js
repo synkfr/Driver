@@ -50,7 +50,7 @@ export class Wheel {
         this.visualYOffset = 0;
     }
 
-    update(forwardVel, lateralVel, driveTorque, brakeTorque, load, dt) {
+    update(forwardVel, lateralVel, driveTorque, brakeTorque, engineBraking, load, dt) {
         this.load = Math.max(load, 0);
 
         if (this.load < 10) {
@@ -79,14 +79,22 @@ export class Wheel {
         this.longitudinalForce = combined.long;
 
         let netTorque = 0;
-        if (this.isDriven) netTorque += driveTorque;
+
+        if (this.isDriven && driveTorque > 0) {
+            netTorque += driveTorque;
+        }
 
         if (this.locked) {
-            const lockDecel = forwardVel * this.mass * 2;
-            netTorque -= lockDecel * this.radius;
-            this.spinSpeed *= 0.9;
+            this.spinSpeed *= 0.85;
+            netTorque = 0;
         } else {
-            netTorque -= brakeTorque * Math.sign(this.spinSpeed);
+            if (brakeTorque > 0 && Math.abs(this.spinSpeed) > 0.1) {
+                netTorque -= brakeTorque * Math.sign(this.spinSpeed);
+            }
+
+            if (engineBraking > 0 && this.isDriven && Math.abs(this.spinSpeed) > 1) {
+                netTorque -= engineBraking * this.radius * Math.sign(this.spinSpeed);
+            }
         }
 
         netTorque -= this.longitudinalForce * this.radius;
@@ -94,8 +102,13 @@ export class Wheel {
         const spinAccel = netTorque / this.inertia;
         this.spinSpeed += spinAccel * dt;
 
-        if (Math.abs(brakeTorque) > 0 && Math.abs(this.spinSpeed) < 1) {
+        if (Math.abs(this.spinSpeed) < 0.5 && Math.abs(driveTorque) < 1 && brakeTorque < 1) {
             this.spinSpeed *= 0.95;
+        }
+
+        const prevSign = Math.sign(this.spinSpeed);
+        if (prevSign !== 0 && Math.sign(this.spinSpeed) !== prevSign && driveTorque <= 0) {
+            this.spinSpeed = 0;
         }
 
         this.spinAngle += this.spinSpeed * dt;

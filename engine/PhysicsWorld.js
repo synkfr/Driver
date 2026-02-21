@@ -240,6 +240,8 @@ export class PhysicsWorld {
         let totalYawTorque = 0;
         v.isDrifting = false;
 
+        const engineBrakingTorque = v.engine.getEngineBraking(v.engine.rpm, throttle, forwardSpeed);
+
         for (let i = 0; i < 4; i++) {
             const wheel = v.wheels[i];
             const worldPos = body.localToWorld(wheel.localPosition);
@@ -254,24 +256,35 @@ export class PhysicsWorld {
             const wLatSpeed = body.linearVelocity.dot(wheelRight);
 
             const driveTorqueForWheel = wheel.isDriven
-                ? wheelTorque * (i < 2 ? torqueSplit.front : torqueSplit.rear) * 0.5
+                ? Math.max(0, wheelTorque) * (i < 2 ? torqueSplit.front : torqueSplit.rear) * 0.5
                 : 0;
 
-            wheel.update(wFwdSpeed, wLatSpeed, driveTorqueForWheel, brakeTorque * 0.25, loads[i], dt);
+            const ebForWheel = wheel.isDriven ? engineBrakingTorque * 0.5 : 0;
 
-            const latForce = -wheel.lateralForce;
-            const longForce = wheel.longitudinalForce;
+            wheel.update(wFwdSpeed, wLatSpeed, driveTorqueForWheel, brakeTorque * 0.25, ebForWheel, loads[i], dt);
 
-            const forceWorld = new Vec3(
-                wheelFwd.x * longForce + wheelRight.x * latForce,
-                0,
-                wheelFwd.z * longForce + wheelRight.z * latForce
-            );
+            const longForceLocal = wheel.longitudinalForce;
+            const latForceLocal = -wheel.lateralForce;
 
-            body.applyForceAtPoint(forceWorld, worldPos);
+            const forceWorldX = wheelFwd.x * longForceLocal + wheelRight.x * latForceLocal;
+            const forceWorldZ = wheelFwd.z * longForceLocal + wheelRight.z * latForceLocal;
+
+            totalLong += fwd.x * forceWorldX + fwd.z * forceWorldZ;
+            totalLat += right.x * forceWorldX + right.z * forceWorldZ;
+
+            const leverArm = wheel.localPosition.clone();
+            totalYawTorque += leverArm.x * (fwd.x * forceWorldX + fwd.z * forceWorldZ)
+                - leverArm.z * (right.x * forceWorldX + right.z * forceWorldZ);
 
             if (wheel.isDrifting()) v.isDrifting = true;
         }
+
+        body.applyForce(new Vec3(
+            fwd.x * totalLong + right.x * totalLat,
+            0,
+            fwd.z * totalLong + right.z * totalLat
+        ));
+        body.applyTorque(new Vec3(0, totalYawTorque, 0));
 
         if (v.isNitroActive) {
             body.applyForce(fwd.clone().scale(v.nitroBoostForce));
